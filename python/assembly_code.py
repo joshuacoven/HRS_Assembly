@@ -2,11 +2,8 @@
 # coding: utf-8
 
 # # To do:
-# * for cams and rand, figure out wave matching
 # * add in weighting option
-# * explore PSID data
 # * add function that bypasses the codebook to find variables based off search terms
-# * make github public
 # * automatic variable cleaning?
 # * clean up existing functions
 
@@ -75,7 +72,7 @@ cams_patterns = ['h*ctots', 'h*cdurs', 'h*cndur', 'h*ctotc']
 cwd = os.getcwd()
 directory = cwd + '/data/HRS/'
 years = [1992, 1994, 1996, 1998, 2000, 2002, 2004, 2006, 2008, 2010, 2012, 2014, 2016]
-output = read_hrs_all_years(years, directory, variables_to_look_for, variables_to_look_for_pre_2002)
+output = read_all_years(years, directory, variables_to_look_for, variables_to_look_for_pre_2002)
 output['hhidpn'] = output['HHID'] + output['PN']
 
 ########################## HRS Rand file ############################################
@@ -93,7 +90,7 @@ long_hrs_rand['wave'] = long_hrs_rand['wave'].astype(float)
 cwd = os.getcwd()
 directory = cwd + '/data/CAMS/'
 years = [2001, 2003, 2005, 2007, 2009, 2011, 2013, 2015, 2017]
-cams_output = read_hrs_all_years(years, directory, CAMS_variables, 'CAMS')
+cams_output = read_all_years(years, directory, CAMS_variables, 'CAMS')
 cams_output['hhidpn'] = cams_output['HHID'] + cams_output['PN']
 cams_output['wave'] = cams_output['wave'] - 0.5 #CAMS wave matching
 
