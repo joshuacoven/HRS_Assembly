@@ -26,6 +26,7 @@ var_dict = {
     , 2012: 'n'
     , 2014: 'o'
     , 2016: 'p' 
+    , 2018: 'q'
 }
 
 #################################### functions ####################################
@@ -152,18 +153,40 @@ def sas_read_year(directory, variables_to_look_for, survey_year, variables_to_lo
         path_list = sorted(list(set([directory_sas + '/' +  x.split('.')[0] 
                                 for x in os.listdir(directory_sas) 
                                     if ('sas' in x.lower())
-                                    and ('r' in x[len(x.split('.')[0])-1].lower())])))
+                                    and (
+                                          ('r' in x[len(x.split('.')[0])-1].lower()) #respondent
+                                        | ('h' in x[len(x.split('.')[0])-1].lower()) #household
+                                        )
+                                     
+                            ]
+                           )
+                       )
+                  )
+        #path_list = sorted(list(set([directory_sas + '/' +  x.split('.')[0] 
+        #                        for x in os.listdir(directory_sas) 
+        #                            if ('sas' in x.lower())
+        #                            and ('r' in x[len(x.split('.')[0])-1].lower())])))
     
     # from paths, get paths leading to files which have our desired variables
     # earlier than 2000, need to read all surveys because naming conventions and variables are unrelated
     # after 2000, only reads files with desired variables in them to save a lot of time
     path_short_list = path_list
+    #print(path_short_list)
     if (survey_year > 2000) and (variables_to_look_for_pre_2002 != 'CAMS'):
         surveys = [x[0] for x in variables_to_look_for] + [x[0:2] for x in variables_to_look_for if 'lb' in x]
-        path_short_list = [x for x in path_list if 'r' in x.split('/')[9].lower() # only get respondent
-                           and any(y == x.split('/')[9].lower()[3:len(x.split('/')[9]) - 2] 
-                                    for y in surveys)]
-
+        path_short_list = [x for x in path_list if (('r' in x.split('/')[len(x.split('/'))-1].lower()  # get respondent
+                                                        and any(y == x.split('/')[len(x.split('/'))-1].lower()[3:len(x.split('/')[len(x.split('/'))-1]) - 2] 
+                                                                    for y in surveys) # get specific file
+                                                    )  
+                                                   ) 
+                            or (('h' in x.split('/')[len(x.split('/'))-1].lower())  # get household
+                                # take all surveys we are looking for, only keep if HH survey (this is the last list comprehension below)
+                                and any(y == x.split('/')[len(x.split('/'))-1].lower()[3:len(x.split('/')[len(x.split('/'))-1]) - 2] 
+                                                                    for y in [w for w in surveys if w in ['h', 'q', 'r', 'u']])
+                                )
+                           ]
+    #
+    (path_short_list)
     # rename variables to names chosen in input dictionary
     rename_dict = copy.deepcopy(variables_to_look_for)
     vars_list = [x for x in variables_to_look_for]
@@ -175,26 +198,50 @@ def sas_read_year(directory, variables_to_look_for, survey_year, variables_to_lo
     # this maybe can get coded away if handle all the info in path and path short list better
     for i in range(len(path_short_list)):
         path = path_short_list[i]
-        print(path)
         path_ind = len(path.split('/')) - 1
         if survey_year < 2001:
             ext_surv_dct = '/' + path.split('/')[path_ind] +  '.SAS' #in the year 2000, files are .SAS and not .sas
+            ext_surv_da = '/' + path.split('/')[path_ind] + '.DA'
         else:
             ext_surv_dct = '/' + path.split('/')[path_ind] +  '.sas'
-        ext_surv_da = '/' + path.split('/')[path_ind] + '.da'
+            ext_surv_da = '/' + path.split('/')[path_ind] + '.da'
         dct_file = directory_sas + ext_surv_dct
         filename = directory_da + ext_surv_da
-
+        print(filename)
         # read the files
         temp_df = read_sas_fwf(dct_file, filename, survey_specific_variables)
         temp_df = temp_df.rename(columns = rename_dict)
         if i == 0:
-            year_frame = temp_df
+            if 'PN' in temp_df.columns:
+                # then it's a respondent survey
+                year_frame = temp_df
+            else:# 'QPN_FIN' in temp_df.columns:
+                #then it's a household survey: household methodology in greater detail below
+                temp_df = temp_df.sort_values(['HHID'] + survey_specific_variables[-3:]).reset_index(drop = True)
+                    
+                # Keep top row for each HHID
+                temp_df = temp_df.drop_duplicates(subset=['HHID'], keep = 'first')
+                year_frame = temp_df
         else:
             try:
                 year_frame = year_frame.merge(temp_df, on = ["HHID", "PN"], how = "outer")
             except:
-                print('this is a pre-1996 household survey, so exclude') # pre-1996 some surveys wont have a PN
+                try:
+                    ##### MERGE HOUSEHOLD DATA ON TO RESPONDENT LEVEL, GET DATASET UNIQUE AT THE HHID LEVEL ###############
+                    # Lowest number is for the first person in the dataset with that HHID, so most likely oldest, or head of household(?)
+                    ### We want the lowest QPN_FIN number for each HHID
+                    ### If no QPN_FIN number for a HHID, select lowest QPN_FAM
+                    ### IF no QPN_FIN or QPN_FAM, we want the lowest QPN_CS number
+                    temp_df = temp_df.sort_values(['HHID', 'PN_CS', 'PN_FIN', 'PN_FAM']).reset_index(drop = True)
+
+                    # Keep top row for each HHID
+                    temp_df = temp_df.drop_duplicates(subset=['HHID'], keep = 'first')
+                    
+                    # THEN MERGE ONCE ROWS ARE UNIQUE TO HHID ###########
+                    year_frame = year_frame.merge(temp_df, on = ["HHID"], how = "outer") # for households
+                    print('household survey')
+                except:
+                    print('this is a pre-1996 household survey, so exclude') # pre-1996 some surveys wont have a PN
 
     # make the wave variable, 1992 was wave 1
     year_frame['wave'] = (survey_year - 1990) / 2
@@ -225,6 +272,7 @@ def read_all_years(years, directory, variables_to_look_for, variables_to_look_fo
         if yr == 1992:
             final_frame = final_frame.drop_duplicates().reset_index(drop = True) #1992 may have a duplicate problem
         print('\n')
+    final_frame = final_frame.drop_duplicates()
     return final_frame.reset_index(drop = True)
 
 
