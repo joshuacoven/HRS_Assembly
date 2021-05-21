@@ -26,11 +26,10 @@
 * Saves time by only looking at desired files and desired sections of files based off of variables specified
 
 # To do
-* Have special variable lookup function so that we don't have to use the codebook
+* Have variable lookup function so that we don't have to use the codebook
 * Clean existing functions
-* Maybe variable cleaning option
+* Automatic variable cleaning for entries like 9999
 * Add variable weighting
-* Make HH level database
 
 # Instructions:
 1. Download the data: You will need an account and it can take up to 24 hrs to get your password
@@ -68,8 +67,26 @@
 
 5. Run the code to join this to the HRS core files
 
+6. Some of the pre-2001 files might have a .da instead of a .DA. Changing those with ".da" to all uppercase, including the extension, will fix that
+* Also changed cams03_r.da to CAMS03_R.da. It became easier to make these 3 or 4 filename changes than to code them in
+
+7. If you are getting weird errors, check that all files were downloaded properly from HRS' website
+	* Example: Error for referencing "year_frame" before that dataframe was created. It was due to an incomplete download from the HRS website in which not all SAS files from 2012 were downloaded, causing the variables of interest to not line up with the dictionaries present.
+
+# Household level files (HHID = Household ID)
+* Added the capability to incorporate HH level files in 2021
+* Need to pull 3 new HH level identifiers to use this: QPN_FIN, QPN_FAM, QPN_CS
+* To merge to respondent level, need to have this data unique at HHID
+* However, multiple people from the same HH may answer the same question, and have different answers
+	* Ex: 3 people from the same HH all answer an HH level question like whether they own or rent their home. There is disagreement in this variable, so to aggregate up to the HH level there must be a tiebreaker
+* Tiebreaker used:
+	* Lowest number is for the first person in the dataset with that HHID, so most likely oldest, or head of household(?)
+    * We want the lowest QPN_FIN number for each HHID
+    * If no QPN_FIN number for a HHID, select lowest QPN_FAM
+    * IF no QPN_FIN or QPN_FAM, we want the lowest QPN_CS number
 
 # Weighting
+* Haven't incorporated any weighting yet
 * "The household weight is scaled so as to have the sum of the weights equal the number of households in the population as measured by the March CPS" http://hrsonline.isr.umich.edu/sitedocs/wghtdoc.pdf
 * One option used in docs is to get a random sampling using the weights as probabilities of selection: http://hrsonline.isr.umich.edu/sitedocs/dmgt/IntroUserGuide.pdf
 
